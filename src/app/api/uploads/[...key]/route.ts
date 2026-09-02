@@ -1,37 +1,19 @@
 import { NextRequest } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
 import { requireAuth } from "@/lib/auth/guards";
 import { apiError, handleApiError } from "@/lib/api-response";
+import { uploadPhoto, getPhotoBuffer } from "@/lib/storage";
 
-/**
- * Implementasi LOCAL FILESYSTEM untuk lib/storage (hanya untuk development).
- * File disimpan di ./uploads (di luar public/, tidak boleh diakses langsung
- * tanpa lewat endpoint ini). Untuk production, ganti lib/storage/index.ts
- * dengan SDK provider object storage (S3/R2/Supabase) dan hapus route ini.
- */
-const UPLOAD_ROOT = path.join(process.cwd(), "uploads");
-
-function resolveSafePath(keyParts: string[]) {
-  const target = path.join(UPLOAD_ROOT, ...keyParts);
-  if (!target.startsWith(UPLOAD_ROOT)) {
-    throw new Error("Path tidak valid.");
-  }
-  return target;
-}
-
-const MIME_BY_EXTENSION: Record<string, string> = {
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".png": "image/png",
-  ".webp": "image/webp",
-  ".gif": "image/gif",
-  ".pdf": "application/pdf",
-};
-
-function guessContentType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  return MIME_BY_EXTENSION[ext] ?? "application/octet-stream";
+function guessContentType(key: string): string {
+  const ext = key.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    webp: "image/webp",
+    gif: "image/gif",
+    pdf: "application/pdf",
+  };
+  return map[ext] ?? "application/octet-stream";
 }
 
 export async function PUT(
@@ -41,11 +23,11 @@ export async function PUT(
   try {
     await requireAuth();
     const { key } = await params;
-    const filePath = resolveSafePath(key);
+    const storageKey = key.join("/");
 
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
     const arrayBuffer = await req.arrayBuffer();
-    await fs.writeFile(filePath, Buffer.from(arrayBuffer));
+    const contentType = req.headers.get("content-type") ?? guessContentType(storageKey);
+    await uploadPhoto(storageKey, Buffer.from(arrayBuffer), contentType);
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -63,13 +45,17 @@ export async function GET(
   try {
     await requireAuth();
     const { key } = await params;
-    const filePath = resolveSafePath(key);
+    const storageKey = key.join("/");
 
-    const fileBuffer = await fs.readFile(filePath);
+    const fileBuffer = await getPhotoBuffer(storageKey);
+    if (!fileBuffer) {
+      return apiError("NOT_FOUND", "File tidak ditemukan.", 404);
+    }
+
     return new Response(new Uint8Array(fileBuffer), {
       status: 200,
       headers: {
-        "Content-Type": guessContentType(filePath),
+        "Content-Type": guessContentType(storageKey),
         "Cache-Control": "private, max-age=3600",
       },
     });
