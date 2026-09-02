@@ -17,7 +17,7 @@ datasource db {
   //   (migrate butuh session lock yang tidak didukung lewat pooler).
   // Untuk dev lokal (Postgres biasa), cukup isi keduanya dengan connection string yang sama.
   url       = env("DATABASE_URL")
-  directUrl = env("DATABASE_URL_UNPOOLED")
+  directUrl = env("DIRECT_URL")
 }
 
 // ---------------------------------------------------------------------------
