@@ -19,11 +19,12 @@
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.9.0",
+    "@supabase/supabase-js": "^2.45.4",
     "bcryptjs": "^3.0.3",
+    "browser-image-compression": "^2.0.2",
     "jose": "^6.2.10",
     "next": "16.3.4",
     "react": "19.2.8",
-    "@supabase/supabase-js": "^2.45.4",
     "react-dom": "19.2.8",
     "zod": "^4.5.4"
   },

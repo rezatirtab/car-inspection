@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { clsx } from "@/lib/utils/clsx";
+import imageCompression from "browser-image-compression";
 
 export type PhotoData = {
   id: string;
@@ -18,12 +19,6 @@ function photoUrl(storageKey: string) {
   return `/api/uploads/${encodeURIComponent(storageKey)}`;
 }
 
-/**
- * Upload foto langsung dari kamera/galeri HP. Alur: presign -> upload file
- * ke storage -> simpan metadata -> tampil sebagai thumbnail.
- * Dipakai baik untuk foto per-item checklist (target: resultId) maupun
- * foto Important Finding (target: findingId).
- */
 export function PhotoUploader({
   inspectionId,
   target,
@@ -42,15 +37,15 @@ export function PhotoUploader({
   const [error, setError] = useState<string | null>(null);
 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const rawFile = e.target.files?.[0];
     e.target.value = ""; // supaya bisa pilih file yang sama lagi kalau perlu
-    if (!file) return;
+    if (!rawFile) return;
 
-    if (!file.type.startsWith("image/")) {
+    if (!rawFile.type.startsWith("image/")) {
       setError("File harus berupa gambar.");
       return;
     }
-    if (file.size > MAX_FILE_SIZE) {
+    if (rawFile.size > MAX_FILE_SIZE) {
       setError("Ukuran foto maksimal 8MB.");
       return;
     }
@@ -58,6 +53,22 @@ export function PhotoUploader({
     setUploading(true);
     setError(null);
     try {
+      // --- TAMBAHAN KODE KOMPRESI DI SINI ---
+      const options = {
+        maxSizeMB: 1,           // Maksimal ukuran berkas 1MB
+        maxWidthOrHeight: 1920, // Batas resolusi maksimal (1080p)
+        useWebWorker: true,
+      };
+
+      const compressedBlob = await imageCompression(rawFile, options);
+      
+      // Mengubah Blob menjadi File agar memiliki properti name dan type
+      const file = new File([compressedBlob], rawFile.name, {
+        type: rawFile.type,
+        lastModified: Date.now(),
+      });
+      // --------------------------------------
+
       // 1. Minta URL upload (presign)
       const presignRes = await fetch(`/api/inspections/${inspectionId}/photos/presign`, {
         method: "POST",
@@ -70,7 +81,7 @@ export function PhotoUploader({
       }
       const { uploadUrl, storageKey } = presignJson.data;
 
-      // 2. Upload file ke storage
+      // 2. Upload file ke storage (menggunakan file yang sudah dikompresi)
       const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": file.type },
@@ -80,7 +91,7 @@ export function PhotoUploader({
         throw new Error("Gagal mengunggah file.");
       }
 
-      // 3. Simpan metadata
+      // 3. Simpan metadata (menggunakan ukuran file yang baru)
       const metaRes = await fetch(`/api/inspections/${inspectionId}/photos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -89,7 +100,7 @@ export function PhotoUploader({
           storageKey,
           fileName: file.name,
           mimeType: file.type,
-          fileSize: file.size,
+          fileSize: file.size, // fileSize terkirim sesuai ukuran terkompresi
         }),
       });
       const metaJson = await metaRes.json();
