@@ -10,8 +10,14 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Integrasi Vercel Postgres (berbasis Neon) menyediakan 2 connection string:
+  // - DATABASE_URL: lewat connection pooler, dipakai runtime app.
+  // - DATABASE_URL_UNPOOLED: koneksi langsung, wajib dipakai untuk migrate
+  //   (migrate butuh session lock yang tidak didukung lewat pooler).
+  // Untuk dev lokal (Postgres biasa), cukup isi keduanya dengan connection string yang sama.
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 // ---------------------------------------------------------------------------
