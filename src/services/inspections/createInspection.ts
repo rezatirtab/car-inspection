@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/prisma";
 
 /**
@@ -61,39 +62,50 @@ export async function createInspection(params: {
 
     // Snapshot SOP: Section -> Item, agar report tidak berubah walau
     // master SOP diedit di kemudian hari.
-    for (const section of sections) {
-      const sectionSnapshot = await tx.sectionSnapshot.create({
-        data: {
-          inspectionId: inspection.id,
-          sectionId: section.id,
-          code: section.code,
-          name: section.name,
-          displayOrder: section.displayOrder,
-        },
-      });
+    // ID di-generate di sini (bukan menunggu DB) supaya section & item bisa
+    // di-insert lewat createMany (batch) alih-alih satu-satu — jauh lebih
+    // sedikit round-trip ke database dan tidak kena timeout transaction.
+    const sectionSnapshotData = sections.map((section) => ({
+      id: randomUUID(),
+      inspectionId: inspection.id,
+      sectionId: section.id,
+      code: section.code,
+      name: section.name,
+      displayOrder: section.displayOrder,
+    }));
 
-      for (const item of section.items) {
-        await tx.itemSnapshot.create({
-          data: {
-            inspectionId: inspection.id,
-            sectionSnapshotId: sectionSnapshot.id,
-            itemId: item.id,
-            code: item.code,
-            name: item.name,
-            description: item.description,
-            inputType: item.inputType,
-            displayOrder: item.displayOrder,
-            allowsNotes: item.allowsNotes,
-            allowsPhoto: item.allowsPhoto,
-            allowsFinding: item.allowsFinding,
-          },
-        });
-      }
+    const itemSnapshotData = sections.flatMap((section, idx) =>
+      section.items.map((item) => ({
+        id: randomUUID(),
+        inspectionId: inspection.id,
+        sectionSnapshotId: sectionSnapshotData[idx].id,
+        itemId: item.id,
+        code: item.code,
+        name: item.name,
+        description: item.description,
+        inputType: item.inputType,
+        displayOrder: item.displayOrder,
+        allowsNotes: item.allowsNotes,
+        allowsPhoto: item.allowsPhoto,
+        allowsFinding: item.allowsFinding,
+      }))
+    );
+
+    if (sectionSnapshotData.length > 0) {
+      await tx.sectionSnapshot.createMany({ data: sectionSnapshotData });
+    }
+    if (itemSnapshotData.length > 0) {
+      await tx.itemSnapshot.createMany({ data: itemSnapshotData });
     }
 
     return tx.inspection.findUniqueOrThrow({
       where: { id: inspection.id },
       include: { client: true, vehicle: true, inspector: true },
     });
+  }, {
+    // Jaring pengaman tambahan: koneksi ke Prisma Postgres lewat serverless
+    // function punya latency lebih tinggi dari dev lokal.
+    maxWait: 10000,
+    timeout: 20000,
   });
 }
