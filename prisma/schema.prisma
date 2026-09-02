@@ -1,0 +1,399 @@
+// ============================================================================
+// VEHICLE INSPECTION MANAGEMENT SYSTEM — PRISMA SCHEMA V1
+// Mengikuti STEP 3 (Database Architecture) & STEP 5 (API Contract) dari
+// dokumen desain teknis proyek. Lihat README.md bagian "Keputusan &
+// Asumsi" untuk daftar hal yang masih berstatus TBD/Draft di dokumen asli.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  INSPECTOR
+}
+
+enum InspectionStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  REVIEWED
+  CANCELLED
+}
+
+enum Condition {
+  GOOD
+  ATTENTION
+  PROBLEM
+  NA
+}
+
+enum InputType {
+  CONDITION
+  CONDITION_PERCENTAGE
+  CONDITION_TEXT
+  AVAILABILITY
+  DIAGNOSTIC
+}
+
+enum Severity {
+  ATTENTION
+  PROBLEM
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReportType {
+  CLIENT_SUMMARY
+  DETAILED_REPORT
+  FULL_REPORT
+}
+
+// ---------------------------------------------------------------------------
+// CORE
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+  role         UserRole
+  isActive     Boolean  @default(true)
+
+  inspections Inspection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Client {
+  id    String  @id @default(uuid())
+  name  String
+  phone String?
+  email String?
+
+  inspections Inspection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("clients")
+}
+
+model Vehicle {
+  id              String  @id @default(uuid())
+  plateNumber     String
+  vehicleType     String?
+  brand           String
+  model           String
+  manufactureYear Int?
+  mileage         Int?
+  // Catatan: color, vin, engineNumber, transmission belum sepenuhnya
+  // berasal dari report sumber -> tetap optional sampai divalidasi bisnis.
+  color           String?
+  vin             String?
+  engineNumber    String?
+  transmission    String?
+
+  inspections Inspection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([plateNumber])
+  @@map("vehicles")
+}
+
+// Nomor inspeksi human-readable, terpisah dari id (UUID) internal.
+model Inspection {
+  id                 String           @id @default(uuid())
+  inspectionNumber   String           @unique
+  clientId           String
+  vehicleId          String
+  inspectorId        String
+  inspectionDate     DateTime         @default(now())
+  inspectionLocation String?
+  status             InspectionStatus @default(DRAFT)
+  startedAt          DateTime?
+  completedAt        DateTime?
+
+  client    Client  @relation(fields: [clientId], references: [id])
+  vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
+  inspector User    @relation(fields: [inspectorId], references: [id])
+
+  sectionSnapshots SectionSnapshot[]
+  itemSnapshots    ItemSnapshot[]
+  results          InspectionResult[]
+  findings         Finding[]
+  photos           InspectionPhoto[]
+  sectionResults   SectionResult[]
+  finalAssessment  FinalAssessment?
+  reports          InspectionReport[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([vehicleId])
+  @@index([inspectorId])
+  @@index([status])
+  @@map("inspections")
+}
+
+// ---------------------------------------------------------------------------
+// SOP MASTER (configurable, bukan hard-coded di kode)
+// ---------------------------------------------------------------------------
+
+model InspectionSection {
+  id           String  @id @default(uuid())
+  code         String  @unique
+  name         String
+  description  String?
+  displayOrder Int
+  isActive     Boolean @default(true)
+
+  items Item[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("inspection_sections")
+}
+
+model Item {
+  id            String    @id @default(uuid())
+  sectionId     String
+  code          String
+  name          String
+  description   String?
+  inputType     InputType
+  isRequired    Boolean   @default(true)
+  allowsNotes   Boolean   @default(true)
+  allowsPhoto   Boolean   @default(false)
+  allowsFinding Boolean   @default(false)
+  displayOrder  Int
+  isActive      Boolean   @default(true)
+
+  section   InspectionSection @relation(fields: [sectionId], references: [id])
+  snapshots ItemSnapshot[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sectionId, code])
+  @@index([sectionId])
+  @@map("inspection_items")
+}
+
+// ---------------------------------------------------------------------------
+// SNAPSHOT (agar report lama tidak berubah walau master SOP di-edit)
+// ---------------------------------------------------------------------------
+
+model SectionSnapshot {
+  id           String @id @default(uuid())
+  inspectionId String
+  sectionId    String
+  code         String
+  name         String
+  displayOrder Int
+
+  inspection     Inspection      @relation(fields: [inspectionId], references: [id])
+  sectionResults SectionResult[]
+  items          ItemSnapshot[]
+
+  createdAt DateTime @default(now())
+
+  @@index([inspectionId])
+  @@map("inspection_section_snapshots")
+}
+
+model ItemSnapshot {
+  id                String    @id @default(uuid())
+  inspectionId      String
+  sectionSnapshotId String
+  itemId            String
+  code              String
+  name              String
+  description       String?
+  inputType         InputType
+  displayOrder      Int
+  allowsNotes       Boolean
+  allowsPhoto       Boolean
+  allowsFinding     Boolean
+
+  inspection      Inspection        @relation(fields: [inspectionId], references: [id])
+  sectionSnapshot SectionSnapshot   @relation(fields: [sectionSnapshotId], references: [id])
+  result          InspectionResult?
+  Item            Item              @relation(fields: [itemId], references: [id])
+
+  @@index([inspectionId])
+  @@index([sectionSnapshotId])
+  @@map("inspection_item_snapshots")
+}
+
+// ---------------------------------------------------------------------------
+// DATA INSPEKSI
+// ---------------------------------------------------------------------------
+
+model InspectionResult {
+  id             String    @id @default(uuid())
+  inspectionId   String
+  itemSnapshotId String    @unique
+  condition      Condition
+  notes          String?
+  technicalValue String?
+  technicalUnit  String?
+  isFinding      Boolean   @default(false)
+  completedAt    DateTime?
+
+  inspection   Inspection   @relation(fields: [inspectionId], references: [id])
+  itemSnapshot ItemSnapshot @relation(fields: [itemSnapshotId], references: [id])
+
+  diagnostics Diagnostic[]
+  findings    Finding[]
+  photos      InspectionPhoto[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([inspectionId])
+  @@map("inspection_results")
+}
+
+model Diagnostic {
+  id          String  @id @default(uuid())
+  resultId    String
+  code        String
+  description String?
+  notes       String?
+
+  result InspectionResult @relation(fields: [resultId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([resultId])
+  @@map("inspection_diagnostics")
+}
+
+model Finding {
+  id               String    @id @default(uuid())
+  inspectionId     String
+  resultId         String?
+  severity         Severity
+  priority         Priority?
+  title            String
+  description      String?
+  recommendation   String?
+  estimatedCostMin Decimal?  @db.Decimal(15, 2)
+  estimatedCostMax Decimal?  @db.Decimal(15, 2)
+
+  inspection Inspection        @relation(fields: [inspectionId], references: [id])
+  result     InspectionResult? @relation(fields: [resultId], references: [id])
+  photos     InspectionPhoto[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([inspectionId])
+  @@index([resultId])
+  @@map("inspection_findings")
+}
+
+model InspectionPhoto {
+  id           String  @id @default(uuid())
+  inspectionId String
+  resultId     String?
+  findingId    String?
+  storageKey   String
+  fileName     String
+  mimeType     String
+  fileSize     Int
+  width        Int?
+  height       Int?
+
+  inspection Inspection        @relation(fields: [inspectionId], references: [id])
+  result     InspectionResult? @relation(fields: [resultId], references: [id])
+  finding    Finding?          @relation(fields: [findingId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([inspectionId])
+  @@index([resultId])
+  @@index([findingId])
+  @@map("inspection_photos")
+}
+
+model SectionResult {
+  id                String   @id @default(uuid())
+  inspectionId      String
+  sectionSnapshotId String
+  sectionScore      Decimal? @db.Decimal(5, 2)
+  conclusion        String?
+
+  inspection      Inspection      @relation(fields: [inspectionId], references: [id])
+  sectionSnapshot SectionSnapshot @relation(fields: [sectionSnapshotId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([inspectionId, sectionSnapshotId])
+  @@map("inspection_section_results")
+}
+
+// ---------------------------------------------------------------------------
+// FINALISASI
+// ---------------------------------------------------------------------------
+
+model FinalAssessment {
+  id                  String     @id @default(uuid())
+  inspectionId        String     @unique
+  overallScore        Decimal?   @db.Decimal(5, 2)
+  overallCondition    Condition?
+  accidentAssessment  String?
+  floodAssessment     String?
+  finalRecommendation String?
+  conclusion          String?
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("final_assessments")
+}
+
+model InspectionReport {
+  id           String     @id @default(uuid())
+  inspectionId String
+  reportType   ReportType
+  fileKey      String
+  fileName     String
+  version      Int        @default(1)
+  generatedAt  DateTime   @default(now())
+
+  inspection Inspection @relation(fields: [inspectionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([inspectionId])
+  @@map("inspection_reports")
+}
