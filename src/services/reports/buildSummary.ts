@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { computeInspectionSummary } from "@/services/inspections/getSummary";
 import { buildFindings } from "./buildFindings";
-import { getPhotoUrl } from "@/lib/storage";
+import { getPhotoBuffer } from "@/lib/storage";
 import type { ReportData } from "@/types/report";
 
 /**
@@ -28,20 +28,27 @@ export async function buildReportData(inspectionId: string): Promise<ReportData>
   const summary = await computeInspectionSummary(inspectionId);
   const findings = await buildFindings(inspectionId);
 
-  const photoUrls = await Promise.all(
-    findings.flatMap((f) => f.photoStorageKeys.map((key) => getPhotoUrl(key)))
+  // Untuk PDF, kita butuh ISI FILE (Buffer), bukan URL — react-pdf
+  // merender di server dan tidak selalu bisa fetch balik ke URL relatif
+  // milik aplikasi sendiri. Ambil hanya foto PERTAMA tiap finding sebagai
+  // thumbnail kecil di ringkasan (foto lengkap tetap ada di halaman
+  // Evidence Appendix terpisah untuk FULL_REPORT).
+  const findingsWithThumbnail = await Promise.all(
+    findings.map(async (f) => ({
+      section: f.section,
+      item: f.item,
+      severity: f.severity,
+      description: f.description,
+      recommendation: f.recommendation,
+      estimatedCostMin: f.estimatedCostMin,
+      estimatedCostMax: f.estimatedCostMax,
+      thumbnail: f.photoStorageKeys[0] ? await getPhotoBuffer(f.photoStorageKeys[0]) : null,
+    }))
   );
-  let photoIdx = 0;
-  const findingsWithUrls = findings.map((f) => ({
-    section: f.section,
-    item: f.item,
-    severity: f.severity,
-    description: f.description,
-    recommendation: f.recommendation,
-    estimatedCostMin: f.estimatedCostMin,
-    estimatedCostMax: f.estimatedCostMax,
-    photoUrls: f.photoStorageKeys.map(() => photoUrls[photoIdx++]),
-  }));
+
+  const vehiclePhoto = inspection.vehiclePhotoStorageKey
+    ? await getPhotoBuffer(inspection.vehiclePhotoStorageKey)
+    : null;
 
   const repairCostSummary = findings.reduce(
     (acc, f) => ({
@@ -69,6 +76,7 @@ export async function buildReportData(inspectionId: string): Promise<ReportData>
       manufactureYear: inspection.vehicle.manufactureYear,
       mileage: inspection.vehicle.mileage,
     },
+    vehiclePhoto,
     overallScore: inspection.finalAssessment?.overallScore
       ? Number(inspection.finalAssessment.overallScore)
       : summary.overallScore,
@@ -93,7 +101,7 @@ export async function buildReportData(inspectionId: string): Promise<ReportData>
         conclusion: sectionResult?.conclusion ?? null,
       };
     }),
-    importantFindings: findingsWithUrls,
+    importantFindings: findingsWithThumbnail,
     repairCostSummary,
   };
 }

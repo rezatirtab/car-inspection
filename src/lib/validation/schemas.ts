@@ -76,6 +76,13 @@ export const photoMetadataSchema = z.object({
   height: z.number().int().positive().optional(),
 });
 
+export const vehiclePhotoSchema = z.object({
+  storageKey: z.string().min(1),
+  fileName: z.string().min(1),
+  mimeType: z.string().min(1),
+  fileSize: z.number().int().positive(),
+});
+
 export const finalAssessmentSchema = z.object({
   overallCondition: conditionEnum.optional(),
   accidentAssessment: z.string().optional(),

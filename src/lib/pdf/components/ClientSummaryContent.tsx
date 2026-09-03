@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet } from "@react-pdf/renderer";
+import { View, Text, Image, StyleSheet } from "@react-pdf/renderer";
 import { pdfStyles, conditionColor, PDF_COLORS } from "../theme";
 import type { ReportData } from "@/types/report";
 import {
@@ -10,12 +10,26 @@ import {
 } from "@/config/constants";
 
 const styles = StyleSheet.create({
-  infoGrid: {
+  topRow: {
     flexDirection: "row",
     gap: 12,
   },
   infoCol: {
     flex: 1,
+    gap: 8,
+  },
+  photoLabel: {
+    fontSize: 7.5,
+    color: PDF_COLORS.textMuted,
+    marginBottom: 3,
+  },
+  photoBox: {
+    width: 155,
+    height: 148,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.border,
+    objectFit: "cover",
   },
   scoreRow: {
     flexDirection: "row",
@@ -61,17 +75,30 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   findingCard: {
+    flexDirection: "row",
+    gap: 8,
     borderWidth: 1,
     borderColor: PDF_COLORS.border,
     borderRadius: 4,
     padding: 8,
     marginBottom: 6,
   },
+  findingBody: {
+    flex: 1,
+  },
   findingTitleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 3,
+  },
+  findingThumbnail: {
+    width: 34,
+    height: 34,
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: PDF_COLORS.border,
+    objectFit: "cover",
   },
 });
 
@@ -94,48 +121,59 @@ export function ClientSummaryContent({ data }: { data: ReportData }) {
 
   return (
     <View>
-      {/* Data inspeksi & kendaraan */}
-      <View style={[pdfStyles.card, styles.infoGrid]}>
+      {/* Data inspeksi & kendaraan, dengan foto unit di kanan */}
+      <View style={styles.topRow}>
         <View style={styles.infoCol}>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>No. Inspeksi</Text>
-            <Text style={pdfStyles.value}>{data.inspectionNumber}</Text>
+          <View style={pdfStyles.card}>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>No. Inspeksi</Text>
+              <Text style={pdfStyles.value}>{data.inspectionNumber}</Text>
+            </View>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>Tanggal</Text>
+              <Text style={pdfStyles.value}>{dateLabel}</Text>
+            </View>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>Lokasi</Text>
+              <Text style={pdfStyles.value}>{data.inspectionLocation ?? "-"}</Text>
+            </View>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>Inspector</Text>
+              <Text style={pdfStyles.value}>{data.inspector.name}</Text>
+            </View>
           </View>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>Tanggal</Text>
-            <Text style={pdfStyles.value}>{dateLabel}</Text>
-          </View>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>Lokasi</Text>
-            <Text style={pdfStyles.value}>{data.inspectionLocation ?? "-"}</Text>
-          </View>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>Inspector</Text>
-            <Text style={pdfStyles.value}>{data.inspector.name}</Text>
+
+          <View style={pdfStyles.card}>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>Kendaraan</Text>
+              <Text style={pdfStyles.value}>
+                {data.vehicle.brand} {data.vehicle.model} {data.vehicle.manufactureYear ?? ""}
+              </Text>
+            </View>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>No. Polisi</Text>
+              <Text style={pdfStyles.value}>{data.vehicle.plateNumber}</Text>
+            </View>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>Kilometer</Text>
+              <Text style={pdfStyles.value}>
+                {data.vehicle.mileage ? `${data.vehicle.mileage.toLocaleString("id-ID")} km` : "-"}
+              </Text>
+            </View>
+            <View style={pdfStyles.labelValueRow}>
+              <Text style={pdfStyles.label}>Client</Text>
+              <Text style={pdfStyles.value}>{data.client.name}</Text>
+            </View>
           </View>
         </View>
-        <View style={styles.infoCol}>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>Kendaraan</Text>
-            <Text style={pdfStyles.value}>
-              {data.vehicle.brand} {data.vehicle.model} {data.vehicle.manufactureYear ?? ""}
-            </Text>
+
+        {data.vehiclePhoto && (
+          <View>
+            <Text style={styles.photoLabel}>Foto Unit</Text>
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <Image src={data.vehiclePhoto} style={styles.photoBox} />
           </View>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>No. Polisi</Text>
-            <Text style={pdfStyles.value}>{data.vehicle.plateNumber}</Text>
-          </View>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>Kilometer</Text>
-            <Text style={pdfStyles.value}>
-              {data.vehicle.mileage ? `${data.vehicle.mileage.toLocaleString("id-ID")} km` : "-"}
-            </Text>
-          </View>
-          <View style={pdfStyles.labelValueRow}>
-            <Text style={pdfStyles.label}>Client</Text>
-            <Text style={pdfStyles.value}>{data.client.name}</Text>
-          </View>
-        </View>
+        )}
       </View>
 
       {/* Skor & Kondisi */}
@@ -221,23 +259,29 @@ export function ClientSummaryContent({ data }: { data: ReportData }) {
           const tone = conditionColor(f.severity === "PROBLEM" ? "PROBLEM" : "ATTENTION");
           return (
             <View key={idx} style={styles.findingCard}>
-              <View style={styles.findingTitleRow}>
-                <Text style={{ fontWeight: 700 }}>
-                  {f.section} — {f.item}
-                </Text>
-                <Text style={{ color: tone.fg, fontWeight: 700, fontSize: 8 }}>
-                  {SEVERITY_LABEL[f.severity] ?? f.severity}
-                </Text>
+              <View style={styles.findingBody}>
+                <View style={styles.findingTitleRow}>
+                  <Text style={{ fontWeight: 700 }}>
+                    {f.section} — {f.item}
+                  </Text>
+                  <Text style={{ color: tone.fg, fontWeight: 700, fontSize: 8 }}>
+                    {SEVERITY_LABEL[f.severity] ?? f.severity}
+                  </Text>
+                </View>
+                {f.description && <Text style={{ marginBottom: 2 }}>{f.description}</Text>}
+                {f.recommendation && (
+                  <Text style={{ color: PDF_COLORS.textMuted }}>Rekomendasi: {f.recommendation}</Text>
+                )}
+                {(f.estimatedCostMin || f.estimatedCostMax) && (
+                  <Text style={{ color: PDF_COLORS.textMuted, marginTop: 2 }}>
+                    Estimasi biaya: {formatCurrency(f.estimatedCostMin ?? 0)} –{" "}
+                    {formatCurrency(f.estimatedCostMax ?? 0)} (indikatif)
+                  </Text>
+                )}
               </View>
-              {f.description && <Text style={{ marginBottom: 2 }}>{f.description}</Text>}
-              {f.recommendation && (
-                <Text style={{ color: PDF_COLORS.textMuted }}>Rekomendasi: {f.recommendation}</Text>
-              )}
-              {(f.estimatedCostMin || f.estimatedCostMax) && (
-                <Text style={{ color: PDF_COLORS.textMuted, marginTop: 2 }}>
-                  Estimasi biaya: {formatCurrency(f.estimatedCostMin ?? 0)} – {formatCurrency(f.estimatedCostMax ?? 0)}{" "}
-                  (indikatif)
-                </Text>
+              {f.thumbnail && (
+                // eslint-disable-next-line jsx-a11y/alt-text
+                <Image src={f.thumbnail} style={styles.findingThumbnail} />
               )}
             </View>
           );

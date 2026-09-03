@@ -1,6 +1,7 @@
 import { Document, Page } from "@react-pdf/renderer";
 import { pdfStyles } from "../theme";
 import { ReportHeader, ReportFooter } from "./ReportHeader";
+import { Watermark } from "./Watermark";
 import { ClientSummaryContent } from "./ClientSummaryContent";
 import { DetailedChecklistContent } from "./DetailedChecklistContent";
 import { EvidenceAppendixContent } from "./EvidenceAppendixContent";
@@ -33,14 +34,16 @@ export function InspectionReportDocument({
       author="Vehicle Inspection Management System"
     >
       <Page size="A4" style={pdfStyles.page} wrap>
-        <ReportHeader title="Vehicle Inspection Report" />
+        <Watermark />
+        <ReportHeader title="Ringkasan untuk Client" />
         <ClientSummaryContent data={data} />
         <ReportFooter inspectionNumber={data.inspectionNumber} />
       </Page>
 
       {(type === "DETAILED_REPORT" || type === "FULL_REPORT") && detailedSections && (
         <Page size="A4" style={pdfStyles.page} wrap>
-          <ReportHeader title="Detailed Inspection Report" />
+          <Watermark />
+          <ReportHeader title="Laporan Detail Inspeksi" />
           <DetailedChecklistContent sections={detailedSections} />
           <ReportFooter inspectionNumber={data.inspectionNumber} />
         </Page>
@@ -48,7 +51,8 @@ export function InspectionReportDocument({
 
       {type === "FULL_REPORT" && evidencePhotos && (
         <Page size="A4" style={pdfStyles.page} wrap>
-          <ReportHeader title="Evidence Appendix" />
+          <Watermark />
+          <ReportHeader title="Lampiran Foto Bukti" />
           <EvidenceAppendixContent photos={evidencePhotos} />
           <ReportFooter inspectionNumber={data.inspectionNumber} />
         </Page>

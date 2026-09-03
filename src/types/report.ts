@@ -17,7 +17,10 @@ export type ReportFinding = {
   recommendation: string | null;
   estimatedCostMin: number | null;
   estimatedCostMax: number | null;
-  photoUrls: string[];
+  /** Thumbnail kecil (foto pertama finding ini, kalau ada) untuk tampil
+   *  ringkas di ringkasan/summary. Foto ukuran penuh tetap ada di halaman
+   *  Evidence Appendix terpisah. */
+  thumbnail: Buffer | null;
 };
 
 export type ReportData = {
@@ -34,6 +37,8 @@ export type ReportData = {
     manufactureYear: number | null;
     mileage: number | null;
   };
+  /** Foto profil kendaraan (1 foto, opsional) — tampil di header Client Summary. */
+  vehiclePhoto: Buffer | null;
   overallScore: number | null;
   overallCondition: string | null;
   accidentAssessment: string | null;

@@ -11,11 +11,11 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  // Integrasi Vercel Postgres (berbasis Neon) menyediakan 2 connection string:
-  // - DATABASE_URL: lewat connection pooler, dipakai runtime app.
-  // - DATABASE_URL_UNPOOLED: koneksi langsung, wajib dipakai untuk migrate
-  //   (migrate butuh session lock yang tidak didukung lewat pooler).
-  // Untuk dev lokal (Postgres biasa), cukup isi keduanya dengan connection string yang sama.
+  // DATABASE_URL: koneksi lewat connection pooler (dipakai runtime app).
+  // DIRECT_URL: koneksi langsung ke database, tanpa pooler (dipakai khusus
+  // saat migration/generate). Wajib dipisah untuk Supabase/Neon di
+  // lingkungan serverless (Vercel) — lihat README bagian Deploy.
+  // Untuk development lokal biasa, isi keduanya dengan URL yang sama.
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
@@ -131,16 +131,19 @@ model Vehicle {
 
 // Nomor inspeksi human-readable, terpisah dari id (UUID) internal.
 model Inspection {
-  id                 String           @id @default(uuid())
-  inspectionNumber   String           @unique
+  id                 String            @id @default(uuid())
+  inspectionNumber   String            @unique
   clientId           String
   vehicleId          String
   inspectorId        String
-  inspectionDate     DateTime         @default(now())
+  inspectionDate     DateTime          @default(now())
   inspectionLocation String?
-  status             InspectionStatus @default(DRAFT)
+  status             InspectionStatus  @default(DRAFT)
   startedAt          DateTime?
   completedAt        DateTime?
+  // Foto profil kendaraan (1 foto, ditampilkan di header report Client
+  // Summary — bukan bagian dari checklist/item, hanya identitas visual).
+  vehiclePhotoStorageKey String?
 
   client    Client  @relation(fields: [clientId], references: [id])
   vehicle   Vehicle @relation(fields: [vehicleId], references: [id])
@@ -246,13 +249,14 @@ model ItemSnapshot {
   allowsPhoto       Boolean
   allowsFinding     Boolean
 
-  inspection      Inspection        @relation(fields: [inspectionId], references: [id])
-  sectionSnapshot SectionSnapshot   @relation(fields: [sectionSnapshotId], references: [id])
+  inspection      Inspection       @relation(fields: [inspectionId], references: [id])
+  sectionSnapshot SectionSnapshot  @relation(fields: [sectionSnapshotId], references: [id])
+  item            Item             @relation(fields: [itemId], references: [id])
   result          InspectionResult?
-  Item            Item              @relation(fields: [itemId], references: [id])
 
   @@index([inspectionId])
   @@index([sectionSnapshotId])
+  @@index([itemId])
   @@map("inspection_item_snapshots")
 }
 

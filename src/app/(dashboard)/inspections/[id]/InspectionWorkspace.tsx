@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { InspectionHeader } from "@/components/inspection/InspectionHeader";
 import { SectionSelector } from "@/components/inspection/SectionSelector";
@@ -64,6 +64,37 @@ export function InspectionWorkspace({
   const [generatingReport, setGeneratingReport] = useState<string | null>(null);
 
   const activeSection = sortedSections.find((s) => s.id === activeSectionId) ?? sortedSections[0];
+  const activeSectionIndex = sortedSections.findIndex((s) => s.id === activeSection?.id);
+
+  function goToSection(offset: number) {
+    const nextIndex = activeSectionIndex + offset;
+    if (nextIndex < 0 || nextIndex >= sortedSections.length) return;
+    setActiveSectionId(sortedSections[nextIndex].id);
+  }
+
+  // Shortcut panah kiri/kanan untuk pindah section dengan cepat saat
+  // inspeksi (mempercepat alur kerja inspector, terutama di laptop/tablet
+  // dengan keyboard). Diabaikan kalau fokus sedang di input/textarea/select
+  // supaya tidak mengganggu pengetikan notes.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (view !== "checklist") return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goToSection(1);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goToSection(-1);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, activeSectionIndex, sortedSections]);
 
   const sectionTabs = sortedSections.map((s) => ({
     id: s.id,
@@ -188,7 +219,29 @@ export function InspectionWorkspace({
 
       {view === "checklist" && (
         <>
-          <SectionSelector sections={sectionTabs} activeId={activeSection?.id ?? ""} onSelect={setActiveSectionId} />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => goToSection(-1)}
+              disabled={activeSectionIndex <= 0}
+              title="Section sebelumnya (panah kiri)"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+            >
+              ←
+            </button>
+            <div className="min-w-0 flex-1">
+              <SectionSelector sections={sectionTabs} activeId={activeSection?.id ?? ""} onSelect={setActiveSectionId} />
+            </div>
+            <button
+              type="button"
+              onClick={() => goToSection(1)}
+              disabled={activeSectionIndex >= sortedSections.length - 1}
+              title="Section berikutnya (panah kanan)"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+            >
+              →
+            </button>
+          </div>
 
           <div className="space-y-3">
             {activeSection?.items.map((item) => (

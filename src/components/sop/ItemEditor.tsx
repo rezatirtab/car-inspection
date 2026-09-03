@@ -17,6 +17,7 @@ export type SopItemData = {
   allowsPhoto: boolean;
   allowsFinding: boolean;
   isActive: boolean;
+  displayOrder: number;
 };
 
 const INPUT_TYPE_LABEL: Record<SopItemData["inputType"], string> = {
@@ -27,7 +28,21 @@ const INPUT_TYPE_LABEL: Record<SopItemData["inputType"], string> = {
   DIAGNOSTIC: "Diagnostic Scan (DTC)",
 };
 
-export function ItemEditor({ item }: { item: SopItemData }) {
+export function ItemEditor({
+  item,
+  canMoveUp,
+  canMoveDown,
+  onMoveUp,
+  onMoveDown,
+  reordering,
+}: {
+  item: SopItemData;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  reordering?: boolean;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -81,7 +96,27 @@ export function ItemEditor({ item }: { item: SopItemData }) {
   if (!editing) {
     return (
       <li className="flex items-center justify-between gap-3 py-2.5 text-sm">
-        <div className="min-w-0">
+        <div className="flex shrink-0 flex-col gap-0.5">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={!canMoveUp || reordering}
+            title="Pindah ke atas"
+            className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-20"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={!canMoveDown || reordering}
+            title="Pindah ke bawah"
+            className="flex h-5 w-5 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-20"
+          >
+            ▼
+          </button>
+        </div>
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium text-slate-800">{item.name}</span>
             {!item.isActive && <Badge tone="gray">Nonaktif</Badge>}

@@ -1,8 +1,10 @@
 import { StyleSheet } from "@react-pdf/renderer";
 
+// Warna diambil dari sampel piksel logo/template asli perusahaan (OTORIZ).
 export const PDF_COLORS = {
-  primary: "#1E3A8A", // biru gelap (sesuai warna header di reference UI)
-  primaryLight: "#EFF4FF",
+  primary: "#A07635", // gold/bronze — dipakai untuk heading, angka skor, dsb
+  primaryDark: "#7C5B28", // gold lebih gelap — dipakai untuk garis pembatas tebal
+  primaryLight: "#FBF6EE",
   good: "#16A34A",
   goodBg: "#F0FDF4",
   attention: "#D97706",
@@ -10,7 +12,7 @@ export const PDF_COLORS = {
   problem: "#DC2626",
   problemBg: "#FEF2F2",
   gray: "#6B7280",
-  border: "#E5E7EB",
+  border: "#E2E2E2",
   text: "#111827",
   textMuted: "#6B7280",
 };
@@ -24,12 +26,21 @@ export const pdfStyles = StyleSheet.create({
     fontFamily: "Helvetica",
     color: PDF_COLORS.text,
   },
+  watermark: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    borderBottomWidth: 2,
-    borderBottomColor: PDF_COLORS.primary,
+    borderBottomWidth: 2.5,
+    borderBottomColor: PDF_COLORS.primaryDark,
     paddingBottom: 10,
     marginBottom: 14,
   },
@@ -44,10 +55,13 @@ export const pdfStyles = StyleSheet.create({
     marginTop: 1,
   },
   reportTitle: {
-    fontSize: 12,
+    fontSize: 8,
     fontWeight: 700,
     textAlign: "right",
-    color: PDF_COLORS.text,
+    color: PDF_COLORS.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 3,
   },
   sectionTitle: {
     fontSize: 10.5,
@@ -92,7 +106,7 @@ export const pdfStyles = StyleSheet.create({
   },
   tableHeader: {
     flexDirection: "row",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FAF7F2",
     borderBottomWidth: 1,
     borderBottomColor: PDF_COLORS.border,
     paddingVertical: 4,

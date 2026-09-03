@@ -59,11 +59,15 @@ cp .env.example .env
 ```
 
 Edit `.env`:
-- `DATABASE_URL` — sesuaikan dengan kredensial PostgreSQL kamu.
+- `DATABASE_URL` dan `DIRECT_URL` — untuk development lokal, isi keduanya
+  dengan URL PostgreSQL yang sama.
 - `AUTH_SECRET` — isi string acak minimal 32 karakter. Generate dengan:
   ```bash
   openssl rand -base64 32
   ```
+- Bagian `STORAGE` (Supabase) **biarkan kosong** untuk development —
+  aplikasi otomatis pakai folder lokal `uploads/`. Isi ini hanya
+  diperlukan saat deploy ke production (lihat bagian 9).
 
 ### 2.4 Migrasi & seed database
 
@@ -323,3 +327,189 @@ ulang `npm run db:generate`.
 | Inspector | inspector@inspeksi.local | Inspector12345! |
 
 Wajib diganti sebelum dipakai dengan data client sungguhan.
+
+---
+
+## 9. Deploy ke Production (Vercel + Supabase)
+
+Panduan ini pakai kombinasi **Vercel** (hosting Next.js) + **Supabase**
+(Database PostgreSQL + Storage foto/PDF) — dipilih karena cukup **1 akun**
+untuk semuanya, dan keduanya punya paket gratis yang cukup untuk mulai.
+Kamu **tidak perlu** membuat akun GitHub/Vercel baru kalau sudah punya —
+tinggal pakai yang sudah ada.
+
+### 9.1 Buat project Supabase
+
+1. Buka [supabase.com](https://supabase.com) → New Project. Catat
+   password database yang kamu buat (dibutuhkan di langkah berikutnya).
+2. Setelah project jadi, buka **Project Settings → Database → Connection
+   string**. Kamu akan lihat beberapa mode koneksi — catat dua ini:
+   - **Transaction pooler** (biasanya port `6543`) → ini untuk
+     `DATABASE_URL`. Tambahkan `?pgbouncer=true` di akhir URL-nya.
+   - **Direct connection** (port `5432`) → ini untuk `DIRECT_URL`.
+3. Buka **Storage** (menu kiri) → **New bucket** → beri nama
+   `vehicle-inspection` (atau sesukamu, nanti disamakan di env var) →
+   **PENTING: pilih Private**, bukan Public (foto kendaraan client tidak
+   untuk konsumsi publik).
+4. Buka **Project Settings → API** → catat:
+   - **Project URL** → untuk `SUPABASE_URL`
+   - **service_role key** (bagian "Project API keys", BUKAN yang
+     `anon`/`public`) → untuk `SUPABASE_SERVICE_ROLE_KEY`. Key ini rahasia,
+     jangan sampai bocor ke kode sisi klien.
+
+### 9.2 Migrasi database ke Supabase (dari laptop kamu)
+
+Sebelum deploy, siapkan skema database di Supabase dengan menjalankan
+migration dari komputer kamu sendiri (Vercel tidak menyediakan akses
+shell untuk menjalankan perintah seperti ini):
+
+```bash
+# Isi .env SEMENTARA dengan DATABASE_URL & DIRECT_URL dari Supabase
+# (boleh pakai file .env yang sama, atau .env.production terpisah)
+npm run db:migrate:deploy   # lihat catatan di bawah kalau script ini belum ada
+npm run db:seed             # opsional — isi Master SOP + akun awal
+```
+
+> Catatan: `package.json` proyek ini sudah punya script `db:deploy` yang
+> menjalankan `prisma migrate deploy` (migration tanpa prompt interaktif,
+> cocok untuk non-development). Jalankan `npm run db:deploy` untuk migrasi
+> ke Supabase, bukan `npm run db:migrate` (yang itu untuk development).
+
+### 9.3 Push kode ke GitHub
+
+Kalau proyek ini belum ada di GitHub:
+
+```bash
+cd car-inspection
+git init
+git add .
+git commit -m "Initial commit"
+# Buat repo baru di github.com, lalu:
+git remote add origin https://github.com/<username>/<nama-repo>.git
+git branch -M main
+git push -u origin main
+```
+
+### 9.4 Import ke Vercel & isi environment variables
+
+1. Buka [vercel.com](https://vercel.com) → **Add New → Project** → pilih
+   repo GitHub yang barusan dibuat.
+2. Framework Preset otomatis terdeteksi **Next.js** — tidak perlu ubah
+   build command.
+3. Di bagian **Environment Variables**, isi semua ini (nilai dari langkah
+   9.1, bukan yang di `.env.example`):
+
+   | Key | Value |
+   |---|---|
+   | `DATABASE_URL` | connection string **Transaction pooler** Supabase |
+   | `DIRECT_URL` | connection string **Direct connection** Supabase |
+   | `AUTH_SECRET` | string acak baru (JANGAN pakai yang sama dengan development — generate ulang: `openssl rand -base64 32`) |
+   | `SUPABASE_URL` | Project URL Supabase |
+   | `SUPABASE_SERVICE_ROLE_KEY` | service_role key Supabase |
+   | `SUPABASE_STORAGE_BUCKET` | nama bucket (`vehicle-inspection`) |
+   | `NODE_ENV` | `production` |
+
+4. Klik **Deploy**. Tunggu build selesai.
+
+### 9.5 Setelah deploy pertama kali
+
+- Buka domain Vercel yang diberikan (`https://<nama-project>.vercel.app`)
+  → coba login pakai akun dari hasil `npm run db:seed` di langkah 9.2.
+- **Segera ganti password akun default** (belum ada halaman ganti password
+  di V1 ini — sementara update manual lewat database, atau tambahkan
+  fitur ganti password kalau dibutuhkan).
+- Setiap kali kamu push commit baru ke branch `main`, Vercel otomatis
+  build & deploy ulang. Kalau ada perubahan `prisma/schema.prisma`,
+  jalankan `npm run db:deploy` dari laptop kamu (mengarah ke Supabase)
+  **sebelum** atau **setelah** push kode — migration database tidak
+  otomatis jalan saat Vercel build.
+
+### 9.6 Hal-hal yang perlu diperhatikan di production
+
+1. **Batas ukuran upload foto.** Vercel Serverless Functions (paket
+   Hobby/Pro) punya batas ukuran request body sekitar 4.5MB. Aplikasi ini
+   membatasi ukuran foto di sisi klien 8MB (lihat `PhotoUploader.tsx`) —
+   yang di atas ~4.5MB berpotensi gagal di Vercel meski lolos validasi
+   klien. Kalau ini jadi masalah nyata, turunkan batas di
+   `PhotoUploader.tsx` (`MAX_FILE_SIZE`) jadi lebih kecil (misal 4MB), atau
+   tambahkan kompresi gambar di sisi klien sebelum upload.
+2. **Signed URL foto kedaluwarsa dalam 1 jam** (`getPhotoUrl`/
+   `getReportUrl` di `src/lib/storage/index.ts`) — ini supaya foto client
+   tidak bisa diakses sembarang orang meski link-nya bocor. Kalau butuh
+   durasi lain, ubah angka `60 * 60` di file tersebut.
+3. **Cold start.** Generate PDF (`@react-pdf/renderer`) agak berat untuk
+   serverless function — kalau terasa lambat di percobaan pertama setelah
+   idle lama, itu wajar (cold start), request berikutnya akan lebih cepat.
+4. **Backup database** — Supabase paket gratis punya retensi backup
+   terbatas. Kalau data client sudah nyata/penting, pertimbangkan upgrade
+   paket atau atur backup manual berkala.
+
+---
+
+## 10. Fitur Tambahan: Branding OTORIZ, Foto Kendaraan, Navigasi Section, Reorder SOP
+
+Update ini menambahkan 5 hal, salah satunya **mengubah skema database**
+(lihat peringatan migration di bawah).
+
+### 10.1 Redesign PDF sesuai brand OTORIZ
+
+- Logo perusahaan (`src/lib/pdf/assets/logo.ts`, disimpan sebagai base64
+  langsung di source code — bukan file gambar terpisah — supaya pasti
+  ikut ter-bundle di serverless function Vercel) tampil di header setiap
+  halaman PDF.
+- Watermark logo transparan (opacity 7%, dirotasi) tampil di **semua**
+  halaman PDF (Summary, Detailed Checklist, Evidence Appendix) —
+  `src/lib/pdf/components/Watermark.tsx`.
+- Warna tema PDF diganti dari biru ke gold/bronze sesuai brand
+  (`src/lib/pdf/theme.ts` → `PDF_COLORS.primary = "#A07635"`).
+- Info perusahaan (`src/config/company.ts`) sudah diisi data OTORIZ CAR
+  INSPECTION (Jakarta, dharmagroup23@gmail.com, +62 851 1782 3062).
+- Penting foto Important Finding sekarang tampil sebagai **thumbnail
+  kecil** (34×34) di sisi kanan tiap baris finding pada halaman Summary —
+  foto ukuran penuh tetap ada terpisah di halaman Evidence Appendix
+  (khusus report type Full Report).
+
+### 10.2 Foto Profil Kendaraan
+
+- Field baru `vehiclePhotoStorageKey` di model `Inspection` — **1 foto
+  opsional** per inspeksi, diisi saat mengisi "Data Kendaraan" di form
+  Inspeksi Baru (`VehiclePhotoPicker.tsx`), diupload otomatis setelah
+  inspeksi berhasil dibuat.
+- Foto ini tampil di kotak "Foto Unit" pada header Client Summary PDF.
+- Kalau upload foto gagal (jaringan lambat dsb.), pembuatan inspeksi
+  **tetap berhasil** — foto profil bersifat opsional, inspector tidak
+  terblokir.
+
+### 10.3 Navigasi Section dengan Panah
+
+- Tombol panah ← → di samping tab section pada halaman kerja inspeksi.
+- Shortcut keyboard: tombol panah kiri/kanan di keyboard juga berfungsi
+  pindah section (otomatis nonaktif kalau fokus sedang di kolom
+  input/textarea/select, supaya tidak mengganggu pengetikan notes).
+
+### 10.4 Reorder Item Master SOP
+
+- Tombol ▲▼ di setiap baris item pada halaman Master SOP (Admin) —
+  menukar `displayOrder` dengan item tetangga di section yang sama.
+- **Cakupan saat ini: reorder ITEM di dalam 1 section saja.** Urutan
+  section itu sendiri (section mana tampil duluan) belum bisa diubah
+  lewat UI — kalau nanti dibutuhkan, tinggal tambahkan tombol serupa di
+  header section (`SectionCard.tsx`) yang PATCH `displayOrder` section
+  lewat `/api/sop/sections/:id`.
+
+### ⚠️ WAJIB: Migration database sebelum menjalankan update ini
+
+Field `vehiclePhotoStorageKey` itu **baru**, jadi database (baik lokal
+maupun production) perlu di-migrate ulang:
+
+```bash
+# Development lokal
+npx prisma migrate dev --name add_vehicle_photo
+
+# Production (Supabase/Prisma Postgres) — jalankan dari laptop, DATABASE_URL
+# & DIRECT_URL di .env harus mengarah ke database production
+npm run db:deploy
+```
+
+Tidak perlu re-seed — data inspeksi yang sudah ada tetap aman, field baru
+ini otomatis `NULL` untuk data lama (kolom optional).

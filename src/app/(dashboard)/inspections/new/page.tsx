@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Label, Input } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
+import { VehiclePhotoPicker } from "@/components/inspection/VehiclePhotoPicker";
 
 /**
  * Alur sederhana V1: isi data client & kendaraan langsung di form yang sama
@@ -24,6 +25,44 @@ export default function NewInspectionPage() {
   const [manufactureYear, setManufactureYear] = useState("");
   const [mileage, setMileage] = useState("");
   const [location, setLocation] = useState("");
+  const [vehiclePhotoFile, setVehiclePhotoFile] = useState<File | null>(null);
+
+  async function uploadVehiclePhoto(inspectionId: string, file: File) {
+    // Presign -> upload file -> simpan sebagai vehiclePhotoStorageKey di
+    // inspeksi. Kegagalan di langkah ini sengaja TIDAK menggagalkan
+    // pembuatan inspeksi (foto profil bersifat opsional) — cukup di-skip
+    // dengan pesan console, inspector masih bisa lanjut kerja.
+    try {
+      const presignRes = await fetch(`/api/inspections/${inspectionId}/photos/presign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, mimeType: file.type }),
+      });
+      const presignJson = await presignRes.json();
+      if (!presignJson.success) return;
+      const { uploadUrl, storageKey } = presignJson.data;
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) return;
+
+      await fetch(`/api/inspections/${inspectionId}/vehicle-photo`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storageKey,
+          fileName: file.name,
+          mimeType: file.type,
+          fileSize: file.size,
+        }),
+      });
+    } catch {
+      // diabaikan — lihat catatan di atas
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,7 +103,13 @@ export default function NewInspectionPage() {
       const inspectionJson = await inspectionRes.json();
       if (!inspectionJson.success) throw new Error(inspectionJson.error?.message ?? "Gagal membuat inspeksi.");
 
-      router.push(`/inspections/${inspectionJson.data.inspection.id}`);
+      const inspectionId = inspectionJson.data.inspection.id;
+
+      if (vehiclePhotoFile) {
+        await uploadVehiclePhoto(inspectionId, vehiclePhotoFile);
+      }
+
+      router.push(`/inspections/${inspectionId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Terjadi kesalahan.");
     } finally {
@@ -129,6 +174,10 @@ export default function NewInspectionPage() {
                 <Label>Kilometer</Label>
                 <Input type="number" value={mileage} onChange={(e) => setMileage(e.target.value)} />
               </div>
+            </div>
+            <div>
+              <Label>Foto Kendaraan</Label>
+              <VehiclePhotoPicker onFileSelected={setVehiclePhotoFile} />
             </div>
           </CardBody>
         </Card>
