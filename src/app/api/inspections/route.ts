@@ -1,42 +1,47 @@
-import { requireAuth, requireInspectionAccess } from "@/lib/auth/guards";
-import { vehiclePhotoSchema } from "@/lib/validation/schemas";
-import { prisma } from "@/lib/db/prisma";
-import { deletePhoto } from "@/lib/storage";
+import { NextRequest } from "next/server";
+import { requireAuth } from "@/lib/auth/guards";
+import { createInspectionSchema } from "@/lib/validation/schemas";
+import { createInspection } from "@/services/inspections/createInspection";
+import { listInspections } from "@/services/inspections/getInspection";
 import { apiSuccess, handleApiError } from "@/lib/api-response";
 
-export async function PUT(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(req: NextRequest) {
   try {
-    const { id } = await params;
     const session = await requireAuth();
-    await requireInspectionAccess(session, id, "WRITE");
+    const { searchParams } = new URL(req.url);
+    const status = searchParams.get("status") as
+      | "DRAFT"
+      | "IN_PROGRESS"
+      | "COMPLETED"
+      | "REVIEWED"
+      | "CANCELLED"
+      | null;
 
-    const body = vehiclePhotoSchema.parse(await req.json());
-
-    const existing = await prisma.inspection.findUniqueOrThrow({
-      where: { id },
-      select: { vehiclePhotoStorageKey: true },
+    // Inspector hanya melihat inspeksinya sendiri; Admin melihat semua.
+    const inspections = await listInspections({
+      inspectorId: session.role === "INSPECTOR" ? session.userId : undefined,
+      status: status ?? undefined,
     });
 
-    const inspection = await prisma.inspection.update({
-      where: { id },
-      data: { vehiclePhotoStorageKey: body.storageKey },
-      select: { id: true, vehiclePhotoStorageKey: true },
+    return apiSuccess({ inspections });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const session = await requireAuth();
+    const body = createInspectionSchema.parse(await req.json());
+
+    const inspection = await createInspection({
+      clientId: body.clientId,
+      vehicleId: body.vehicleId,
+      inspectorId: session.userId,
+      inspectionLocation: body.inspectionLocation,
     });
 
-    // Hapus foto lama kalau ada penggantian, biar tidak menumpuk file yatim.
-    if (existing.vehiclePhotoStorageKey && existing.vehiclePhotoStorageKey !== body.storageKey) {
-      try {
-        await deletePhoto(existing.vehiclePhotoStorageKey);
-      } catch {
-        // sengaja diabaikan — kegagalan hapus file lama tidak boleh
-        // menggagalkan penyimpanan foto baru
-      }
-    }
-
-    return apiSuccess({ inspection });
+    return apiSuccess({ inspection }, 201);
   } catch (err) {
     return handleApiError(err);
   }
