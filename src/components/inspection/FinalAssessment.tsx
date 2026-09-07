@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Label, Select, Textarea } from "@/components/ui/Form";
+import { Input, Label, Select, Textarea } from "@/components/ui/Form";
 import { Button } from "@/components/ui/Button";
 import {
   ACCIDENT_ASSESSMENT_OPTIONS,
@@ -11,6 +11,8 @@ import {
 } from "@/config/constants";
 
 export type FinalAssessmentValue = {
+  /** Diisi manual oleh inspector (0-100), bukan hasil perhitungan otomatis. */
+  overallScore?: number;
   overallCondition?: "GOOD" | "ATTENTION" | "PROBLEM";
   accidentAssessment?: string;
   floodAssessment?: string;
@@ -19,12 +21,9 @@ export type FinalAssessmentValue = {
 };
 
 export function FinalAssessmentForm({
-  systemRecommendedCondition,
   initialValue,
   onSubmit,
 }: {
-  /** Rekomendasi sistem (draft), inspector tetap yang mengonfirmasi final. */
-  systemRecommendedCondition?: "GOOD" | "ATTENTION" | "PROBLEM" | null;
   initialValue?: FinalAssessmentValue;
   onSubmit: (value: FinalAssessmentValue) => Promise<void>;
 }) {
@@ -49,16 +48,27 @@ export function FinalAssessmentForm({
     <form onSubmit={handleSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-5">
       <h3 className="font-semibold text-slate-900">Final Vehicle Assessment</h3>
 
-      {systemRecommendedCondition && (
-        <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">
-          Rekomendasi sistem (draft, berdasarkan skor):{" "}
-          <strong>
-            {OVERALL_CONDITION_OPTIONS.find((o) => o.value === systemRecommendedCondition)?.label ??
-              systemRecommendedCondition}
-          </strong>
-          . Silakan konfirmasi atau ubah sesuai penilaian Anda.
+      <div>
+        <Label required>Overall Score</Label>
+        <Input
+          type="number"
+          min={0}
+          max={100}
+          step={1}
+          placeholder="0-100"
+          value={value.overallScore ?? ""}
+          onChange={(e) =>
+            setValue((v) => ({
+              ...v,
+              overallScore: e.target.value === "" ? undefined : Number(e.target.value),
+            }))
+          }
+        />
+        <p className="mt-1 text-xs text-slate-400">
+          Diisi manual oleh inspector berdasarkan penilaian keseluruhan kendaraan (bukan hasil hitung otomatis dari
+          checklist).
         </p>
-      )}
+      </div>
 
       <div>
         <Label required>Overall Condition</Label>

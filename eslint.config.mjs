@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Script utilitas one-off berbasis CommonJS, bukan bagian dari app Next.js.
+    "convert-logo.js",
   ]),
 ]);
 

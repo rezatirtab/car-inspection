@@ -1,7 +1,6 @@
 import { requireAuth, requireInspectionAccess } from "@/lib/auth/guards";
 import { finalAssessmentSchema } from "@/lib/validation/schemas";
 import { prisma } from "@/lib/db/prisma";
-import { computeInspectionSummary } from "@/services/inspections/getSummary";
 import { apiSuccess, handleApiError } from "@/lib/api-response";
 
 export async function PUT(
@@ -15,15 +14,15 @@ export async function PUT(
 
     const body = finalAssessmentSchema.parse(await req.json());
 
-    // System recommendation (draft) dihitung dari section score, tetapi
-    // inspector tetap yang mengunci overallCondition (lihat TBD #2 di
-    // dokumen: "system recommendation + inspector confirmation").
-    const summary = await computeInspectionSummary(id);
-
+    // Catatan: overallScore sekarang diisi MANUAL oleh inspector
+    // (body.overallScore), bukan lagi dipaksa dari hasil perhitungan
+    // otomatis. Fungsi computeInspectionSummary tetap dipertahankan di
+    // codebase (dipakai di tempat lain / bisa diaktifkan lagi nanti kalau
+    // dibutuhkan), tapi tidak lagi menimpa nilai overallScore final.
     const finalAssessment = await prisma.finalAssessment.upsert({
       where: { inspectionId: id },
       update: {
-        overallScore: summary.overallScore,
+        overallScore: body.overallScore,
         overallCondition: body.overallCondition,
         accidentAssessment: body.accidentAssessment,
         floodAssessment: body.floodAssessment,
@@ -32,7 +31,7 @@ export async function PUT(
       },
       create: {
         inspectionId: id,
-        overallScore: summary.overallScore,
+        overallScore: body.overallScore,
         overallCondition: body.overallCondition,
         accidentAssessment: body.accidentAssessment,
         floodAssessment: body.floodAssessment,

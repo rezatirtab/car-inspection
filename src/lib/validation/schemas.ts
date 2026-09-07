@@ -84,6 +84,9 @@ export const vehiclePhotoSchema = z.object({
 });
 
 export const finalAssessmentSchema = z.object({
+  // Diisi manual oleh inspector (menggantikan skor hasil perhitungan
+  // otomatis sebagai nilai final yang tersimpan/ditampilkan di report).
+  overallScore: z.number().min(0).max(100).optional(),
   overallCondition: conditionEnum.optional(),
   accidentAssessment: z.string().optional(),
   floodAssessment: z.string().optional(),

@@ -219,29 +219,7 @@ export function InspectionWorkspace({
 
       {view === "checklist" && (
         <>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => goToSection(-1)}
-              disabled={activeSectionIndex <= 0}
-              title="Section sebelumnya (panah kiri)"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-            >
-              ←
-            </button>
-            <div className="min-w-0 flex-1">
-              <SectionSelector sections={sectionTabs} activeId={activeSection?.id ?? ""} onSelect={setActiveSectionId} />
-            </div>
-            <button
-              type="button"
-              onClick={() => goToSection(1)}
-              disabled={activeSectionIndex >= sortedSections.length - 1}
-              title="Section berikutnya (panah kanan)"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-30"
-            >
-              →
-            </button>
-          </div>
+          <SectionSelector sections={sectionTabs} activeId={activeSection?.id ?? ""} onSelect={setActiveSectionId} />
 
           <div className="space-y-3">
             {activeSection?.items.map((item) => (
@@ -278,6 +256,30 @@ export function InspectionWorkspace({
                 )}
               </div>
             ))}
+          </div>
+
+          {/* Shortcut navigasi section dipindah ke bawah daftar item, supaya
+              tidak menghalangi tab section di atas dan lebih mudah dijangkau
+              setelah inspector selesai mengisi section saat ini. */}
+          <div className="flex items-center gap-2 border-t border-slate-200 pt-3">
+            <button
+              type="button"
+              onClick={() => goToSection(-1)}
+              disabled={activeSectionIndex <= 0}
+              title="Section sebelumnya (panah kiri)"
+              className="flex h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+            >
+              ← Section Sebelumnya
+            </button>
+            <button
+              type="button"
+              onClick={() => goToSection(1)}
+              disabled={activeSectionIndex >= sortedSections.length - 1}
+              title="Section berikutnya (panah kanan)"
+              className="flex h-9 flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-30"
+            >
+              Section Berikutnya →
+            </button>
           </div>
         </>
       )}
