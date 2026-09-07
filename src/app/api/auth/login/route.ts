@@ -9,8 +9,11 @@ import { apiSuccess, apiError, handleApiError } from "@/lib/api-response";
 export async function POST(req: NextRequest) {
   try {
     const body = loginSchema.parse(await req.json());
+    // Normalisasi email: hapus spasi tersembunyi & samakan huruf besar/kecil,
+    // supaya tidak gagal login gara-gara autocapitalize/autofill di HP.
+    const normalizedEmail = body.email.trim().toLowerCase();
 
-    const user = await prisma.user.findUnique({ where: { email: body.email } });
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user || !user.isActive) {
       return apiError("INVALID_CREDENTIALS", "Email atau password salah.", 401);
     }
